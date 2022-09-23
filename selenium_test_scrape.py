@@ -53,7 +53,12 @@ with webdriver.Chrome("./chromedriver_win32_chrome105.0.5195/chromedriver.exe") 
     print(scrapedJobs[5].company_name)
     print(scrapedJobs[7].company_name)
 
+    # Convert list of objects to JSON
     json1 = json.dumps(scrapedJobs[0].__dict__)
     print(json1)
-    json2 = json.dumps([obj.__dict__ for obj in scrapedJobs])
+    data2convert = [obj.__dict__ for obj in scrapedJobs]
+    json2 = json.dumps(data2convert)
     print(json2)
+    # Write JSON to file
+    with open('indeed_JSON.json', 'w') as file:
+        json.dump(data2convert, file, ensure_ascii=False, indent=4)
