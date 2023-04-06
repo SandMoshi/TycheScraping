@@ -1,7 +1,9 @@
 from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
-import time
 from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+import time
 import json
 import os
 
@@ -26,8 +28,10 @@ class Job(object):
     remote = ''
     datePosted = ''
     status = ''
+    job_type = ''
+    company_rating = ''
 
-    def __init__(self, index, job_title, company_name, location, salary, job_posting_url,  description, remote, datePosted, status):
+    def __init__(self, index, job_title, company_name, location, salary, job_posting_url,  description, remote, datePosted, status, job_type, company_rating):
         self.index = index
         self.title = job_title
         self.company = company_name
@@ -38,10 +42,12 @@ class Job(object):
         self.remote = remote
         self.datePosted = datePosted
         self.status = status
+        self.job_type = job_type
+        self.company_rating = company_rating
 
 
-def make_job(index, job_title, company_name, location, salary, job_posting_url, description, remote, datePosted, status):
-    return Job(index, job_title, company_name, location, salary, job_posting_url, description, remote, datePosted, status)
+def make_job(index, job_title, company_name, location, salary, job_posting_url, description, remote, datePosted, status, job_type, company_rating):
+    return Job(index, job_title, company_name, location, salary, job_posting_url, description, remote, datePosted, status, job_type, company_rating)
 
 
 # ============================
@@ -50,7 +56,7 @@ def make_job(index, job_title, company_name, location, salary, job_posting_url, 
 
 # Load up the website in Chrome
 with webdriver.Chrome("./chromedriver_win32_chrome111.0.5563.64/chromedriver.exe") as driver:
-    # wait = WebDriverWait(driver, 10)
+    wait = WebDriverWait(driver, 10)
     driver.get(start_url)
     time.sleep(5)
     jobs = driver.find_elements_by_css_selector('div.job_seen_beacon')
@@ -84,13 +90,13 @@ with webdriver.Chrome("./chromedriver_win32_chrome111.0.5563.64/chromedriver.exe
             pass
         print('SAND @ ', index, 'location:', location)
 
-        remote = None
-        if "Hybrid" in location:
-            remote = "Hybrid"
-        elif "Remote" in location:
-            remote = "Remote"
-        else:
-            remote = "Office"
+        remote = "No"
+        if location is not None:
+            if "Hybrid" in location:
+                remote = "Hybrid"
+            elif "Remote" in location:
+                remote = "Remote"
+
         print('SAND @ ', index, 'remote:', remote)
 
         # Try to find the salary, otherwise pass
@@ -115,16 +121,47 @@ with webdriver.Chrome("./chromedriver_win32_chrome111.0.5563.64/chromedriver.exe
 
         status = None
 
+        # Grab information from details panel
         description = None
+        job_type = None
+        job.click()
+        # Wait for panel with description to appear
+        wait.until(EC.presence_of_element_located(
+            (By.CSS_SELECTOR, "#jobsearch-ViewjobPaneWrapper")))
+        description = driver.find_element_by_css_selector(
+            '#jobDescriptionText').text
+        try:
+            job_type_parent = driver.find_element_by_css_selector(
+                'div:contains("Job Type")')
+            job_type = job_type_parent.find_element_by_xpath(
+                'following-sibling::div')
+        except NoSuchElementException:
+            pass
+
+        # Grab the rating
+        company_rating = None
+        try:
+            ratingContainer = driver.find_element_by_css_selector(
+                '#companyRatings')
+            if ratingContainer is not None:
+                company_rating = ratingContainer.get_attribute(
+                    'aria-label').split("stars", 1)[0] + "stars"  # discard 2nd half of sentence
+        except NoSuchElementException:
+            pass
+        print('SAND @ ', index, 'rating:', company_rating)
 
         # Add to master list of jobs
         scrapedJobs.append(
-            (make_job(index, job_title, company_name, location, salary, job_posting_url, description, remote, datePosted, status)))
+            (make_job(index, job_title, company_name, location, salary, job_posting_url, description, remote, datePosted, status, job_type, company_rating)))
+
+        # TODO - REMOVE THIS
+        if index == 10:
+            break
 
     # Convert list of objects to JSON
     json1 = json.dumps(scrapedJobs[0].__dict__)
     data2convert = [obj.__dict__ for obj in scrapedJobs]
     json2 = json.dumps(data2convert)
     # Write JSON to file
-    with open(fileName, 'w') as file:
+    with open(fileName, 'w', encoding='utf-8') as file:
         json.dump(data2convert, file, ensure_ascii=False, indent=4)
